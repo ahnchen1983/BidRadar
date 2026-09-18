@@ -1,8 +1,10 @@
+mod collector;
 mod domain;
+mod repository;
 mod rules;
 mod source;
 
-use std::{env, net::SocketAddr, sync::Arc};
+use std::{env, net::SocketAddr, sync::Arc, time::Duration};
 
 use axum::{
     extract::State,
@@ -11,14 +13,18 @@ use axum::{
     routing::{get, post},
     Json, Router,
 };
+use chrono::NaiveDate;
 use domain::{CreateWatchRule, RuleSpec, TenderCandidate, WatchRuleSummary};
-use serde::Serialize;
+use repository::PostgresCollectorRepository;
+use serde::{Deserialize, Serialize};
+use source::pcc::PccDailySource;
 use sqlx::{postgres::PgPoolOptions, PgPool};
 use uuid::Uuid;
 
 #[derive(Clone)]
 struct AppState {
     db: PgPool,
+    pcc_source: PccDailySource,
 }
 
 #[derive(Serialize)]
@@ -38,9 +44,14 @@ async fn main() -> anyhow::Result<()> {
         )
         .init();
 
-    let database_url =
-        env::var("DATABASE_URL").unwrap_or_else(|_| "postgres://bidradar:bidradar@localhost:5432/bidradar".into());
+    let database_url = env::var("DATABASE_URL")
+        .unwrap_or_else(|_| "postgres://bidradar:bidradar@localhost:5432/bidradar".into());
     let bind_addr = env::var("BIND_ADDR").unwrap_or_else(|_| "0.0.0.0:8080".into());
+    let pcc_base_url = env::var("PCC_BASE_URL").ok();
+    let pcc_timeout_seconds = env::var("PCC_TIMEOUT_SECONDS")
+        .ok()
+        .and_then(|value| value.parse::<u64>().ok())
+        .unwrap_or(60);
 
     let db = PgPoolOptions::new()
         .max_connections(10)
@@ -49,12 +60,20 @@ async fn main() -> anyhow::Result<()> {
 
     sqlx::migrate!("../migrations").run(&db).await?;
 
-    let state = Arc::new(AppState { db });
+    let pcc_source = PccDailySource::new(
+        pcc_base_url.as_deref(),
+        Duration::from_secs(pcc_timeout_seconds),
+    )?;
+    let state = Arc::new(AppState { db, pcc_source });
 
     let app = Router::new()
         .route("/health", get(health))
-        .route("/api/v1/watch-rules", get(list_watch_rules).post(create_watch_rule))
+        .route(
+            "/api/v1/watch-rules",
+            get(list_watch_rules).post(create_watch_rule),
+        )
         .route("/api/v1/match/preview", post(preview_match))
+        .route("/api/v1/collect/daily", post(run_daily_collector))
         .with_state(state);
 
     let addr: SocketAddr = bind_addr.parse()?;
@@ -172,9 +191,26 @@ async fn preview_match(Json(input): Json<PreviewRequest>) -> Json<domain::MatchR
     Json(rules::evaluate(&input.rule, &input.tender))
 }
 
+#[derive(Deserialize)]
+struct DailyCollectorRequest {
+    date: NaiveDate,
+}
+
+async fn run_daily_collector(
+    State(state): State<Arc<AppState>>,
+    Json(input): Json<DailyCollectorRequest>,
+) -> Result<Json<collector::CollectorReport>, ApiError> {
+    let repository = PostgresCollectorRepository::new(state.db.clone());
+    let report = collector::collect_daily(&state.pcc_source, &repository, input.date)
+        .await
+        .map_err(ApiError::Collector)?;
+    Ok(Json(report))
+}
+
 enum ApiError {
     BadRequest(String),
     Database(sqlx::Error),
+    Collector(anyhow::Error),
 }
 
 impl From<sqlx::Error> for ApiError {
@@ -186,14 +222,24 @@ impl From<sqlx::Error> for ApiError {
 impl IntoResponse for ApiError {
     fn into_response(self) -> axum::response::Response {
         match self {
-            Self::BadRequest(message) => {
-                (StatusCode::BAD_REQUEST, Json(serde_json::json!({ "error": message }))).into_response()
-            }
+            Self::BadRequest(message) => (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({ "error": message })),
+            )
+                .into_response(),
             Self::Database(error) => {
                 tracing::error!(%error, "database error");
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     Json(serde_json::json!({ "error": "database error" })),
+                )
+                    .into_response()
+            }
+            Self::Collector(error) => {
+                tracing::error!(%error, "daily collector failed");
+                (
+                    StatusCode::BAD_GATEWAY,
+                    Json(serde_json::json!({ "error": "daily collector failed" })),
                 )
                     .into_response()
             }

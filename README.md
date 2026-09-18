@@ -40,3 +40,29 @@ BidRadar 是一套以「需求驅動（demand-driven）」為核心的政府標�
 **Scan broadly, store selectively, verify continuously.**
 
 政府來源是 Source of Truth；BidRadar PostgreSQL 是服務使用者查詢與監控的高速資料層。
+
+## V0.1 API
+
+```text
+GET  /health
+GET  /api/v1/watch-rules
+POST /api/v1/watch-rules
+POST /api/v1/match/preview
+POST /api/v1/collect/daily
+```
+
+手動執行指定日期的每日掃描：
+
+```http
+POST /api/v1/collect/daily
+Content-Type: application/json
+
+{
+  "date": "2026-09-18"
+}
+```
+
+Collector 只會保存至少命中一條啟用中 Watch Rule 的公告。重跑同一天時，
+相同公告版本不會重複建立；若沒有啟用中的規則，則不會呼叫政府來源。
+
+官方來源、收錄類型與識別策略見 [docs/data-sources.md](./docs/data-sources.md)。

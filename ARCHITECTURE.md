@@ -85,6 +85,25 @@ The adapter exposes two conceptual operations:
 1. `list_notices(date)`
 2. `fetch_detail(source_tender_id)`
 
+The V0.1 `PCC_DAILY_HTML` adapter implements the first operation against the
+official announcement-date page. HTML selectors, ROC date formatting and PCC
+redirect URLs remain inside the adapter; the collector only receives normalized
+`TenderCandidate` values.
+
+### Collector Pipeline
+
+The collector loads enabled rules before contacting PCC. A run with no enabled
+rules is recorded and skipped. For a normal run it:
+
+1. fetches one requested publication date;
+2. keeps opportunity-like notice sections only;
+3. evaluates every candidate against enabled Watch Rules;
+4. discards candidates with zero matches;
+5. upserts the matched tender identity;
+6. inserts a notice version idempotently;
+7. inserts one match record per rule and version idempotently;
+8. records run counts and failure state in `collector_runs`.
+
 ## Performance Principles
 
 1. Never fetch external source data on every page view.

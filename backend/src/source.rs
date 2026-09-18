@@ -1,17 +1,15 @@
+pub mod pcc;
+
 use anyhow::Result;
+use async_trait::async_trait;
 use chrono::NaiveDate;
 
 use crate::domain::TenderCandidate;
 
 /// Boundary between BidRadar and an upstream procurement data source.
-///
-/// A concrete PCC adapter will be implemented in GOAL-001 without leaking
-/// endpoint/HTML/CSV details into the rule engine or persistence layer.
-pub trait TenderSource {
+#[async_trait]
+pub trait TenderSource: Send + Sync {
     fn source_name(&self) -> &'static str;
 
-    fn list_notices(
-        &self,
-        date: NaiveDate,
-    ) -> impl std::future::Future<Output = Result<Vec<TenderCandidate>>> + Send;
+    async fn list_notices(&self, date: NaiveDate) -> Result<Vec<TenderCandidate>>;
 }

@@ -1,7 +1,7 @@
 FROM rust:1-bookworm AS builder
 WORKDIR /app
 
-COPY Cargo.toml ./
+COPY Cargo.toml Cargo.lock ./
 COPY backend/Cargo.toml backend/Cargo.toml
 COPY backend/src backend/src
 COPY migrations migrations

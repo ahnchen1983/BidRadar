@@ -20,6 +20,12 @@ The first-stage scanner should fetch only fields needed to identify and classify
 
 A notice that does not match any enabled watch rule is discarded after evaluation.
 
+The V0.1 daily adapter deliberately excludes result-only or unrelated gazette
+sections such as awards, failed awards, suspended vendors, property sales and
+leases. Early opportunity signals (public consultation and document preview)
+remain eligible and retain their original notice type so users can distinguish
+them from an active tender.
+
 ## 2. Watch Rule Types
 
 Two keyword scopes are supported:
@@ -114,3 +120,16 @@ BidRadar records:
 - source_hash
 
 This makes freshness visible and supports revalidation without blocking normal reads.
+
+## 8. Index-stage Identity
+
+The daily page exposes the agency name, tender number and a notice-version
+filename, but not the canonical agency code in its list row. V0.1 therefore uses:
+
+- tender identity: SHA-256 of normalized agency name + tender number;
+- version identity: the PCC notice filename;
+- source URL: the official dated redirect URL.
+
+This keeps initial notices and corrections under one tender while retaining
+each published version. GOAL-003 detail ingestion will reconcile the temporary
+index-stage identity with the official agency code and detail identifiers.
