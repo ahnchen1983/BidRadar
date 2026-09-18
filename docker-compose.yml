@@ -1,0 +1,33 @@
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: bidradar
+      POSTGRES_USER: bidradar
+      POSTGRES_PASSWORD: bidradar
+    ports:
+      - "5432:5432"
+    volumes:
+      - bidradar_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bidradar -d bidradar"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    environment:
+      DATABASE_URL: postgres://bidradar:bidradar@db:5432/bidradar
+      BIND_ADDR: 0.0.0.0:8080
+      RUST_LOG: bidradar_api=info
+    ports:
+      - "8080:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  bidradar_pgdata:
