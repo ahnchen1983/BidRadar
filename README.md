@@ -40,3 +40,56 @@ BidRadar 是一套以「需求驅動（demand-driven）」為核心的政府標�
 **Scan broadly, store selectively, verify continuously.**
 
 政府來源是 Source of Truth；BidRadar PostgreSQL 是服務使用者查詢與監控的高速資料層。
+
+## V0.1 API
+
+```text
+GET  /health
+GET  /api/v1/watch-rules
+POST /api/v1/watch-rules
+POST /api/v1/match/preview
+POST /api/v1/collect/daily
+```
+
+手動執行指定日期的每日掃描：
+
+```http
+POST /api/v1/collect/daily
+Content-Type: application/json
+
+{
+  "date": "2026-09-18"
+}
+```
+
+Collector 只會保存至少命中一條啟用中 Watch Rule 的公告。重跑同一天時，
+相同公告版本不會重複建立；若沒有啟用中的規則，則不會呼叫政府來源。
+
+官方來源、收錄類型與識別策略見 [docs/data-sources.md](./docs/data-sources.md)。
+
+## 每日排程
+
+Docker Compose 預設啟用排程，依台灣時間執行：
+
+```text
+06:00
+12:00
+18:00
+23:00
+```
+
+每一個排程時段會依序補掃「昨天 → 今天」。服務重新啟動時會補執行最近
+一個尚未被認領的排程時段；多個 API instance 同時啟動時，PostgreSQL
+只允許其中一個取得該時段。
+
+可透過以下環境變數調整：
+
+```text
+DAILY_SCHEDULER_ENABLED=true
+DAILY_SCHEDULER_TIMEZONE=Asia/Taipei
+DAILY_SCHEDULER_TIMES=06:00,12:00,18:00,23:00
+DAILY_SCHEDULER_LOOKBACK_DAYS=1
+DAILY_SCHEDULER_CATCH_UP_ON_STARTUP=true
+```
+
+完整行為與失敗處理見 [docs/scheduler.md](./docs/scheduler.md)。

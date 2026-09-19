@@ -23,6 +23,11 @@ services:
       DATABASE_URL: postgres://bidradar:bidradar@db:5432/bidradar
       BIND_ADDR: 0.0.0.0:8080
       RUST_LOG: bidradar_api=info
+      DAILY_SCHEDULER_ENABLED: "true"
+      DAILY_SCHEDULER_TIMEZONE: Asia/Taipei
+      DAILY_SCHEDULER_TIMES: "06:00,12:00,18:00,23:00"
+      DAILY_SCHEDULER_LOOKBACK_DAYS: "1"
+      DAILY_SCHEDULER_CATCH_UP_ON_STARTUP: "true"
     ports:
       - "8080:8080"
     depends_on:

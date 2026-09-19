@@ -121,6 +121,8 @@ mod tests {
             agency_code: Some("376500000A".into()),
             agency_name: "嘉義縣政府".into(),
             notice_type: Some("招標公告".into()),
+            notice_date: None,
+            version_key: None,
             source_url: None,
         }
     }
