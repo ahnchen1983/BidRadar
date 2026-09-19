@@ -2,6 +2,7 @@ mod collector;
 mod domain;
 mod repository;
 mod rules;
+mod scheduler;
 mod source;
 
 use std::{env, net::SocketAddr, sync::Arc, time::Duration};
@@ -64,6 +65,21 @@ async fn main() -> anyhow::Result<()> {
         pcc_base_url.as_deref(),
         Duration::from_secs(pcc_timeout_seconds),
     )?;
+    let scheduler_config = scheduler::SchedulerConfig::from_env()?;
+    if scheduler_config.enabled {
+        let scheduler_db = db.clone();
+        let scheduler_source = pcc_source.clone();
+        tokio::spawn(async move {
+            if let Err(error) =
+                scheduler::run(scheduler_db, scheduler_source, scheduler_config).await
+            {
+                tracing::error!(%error, "daily scheduler stopped");
+            }
+        });
+    } else {
+        tracing::info!("daily scheduler is disabled");
+    }
+
     let state = Arc::new(AppState { db, pcc_source });
 
     let app = Router::new()

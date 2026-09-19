@@ -133,3 +133,14 @@ filename, but not the canonical agency code in its list row. V0.1 therefore uses
 This keeps initial notices and corrections under one tender while retaining
 each published version. GOAL-003 detail ingestion will reconcile the temporary
 index-stage identity with the official agency code and detail identifiers.
+
+## 9. Scheduled Coverage
+
+The default scheduler executes four times per Taiwan day and requests both the
+scheduled local date and the previous date. The overlap recovers from late
+publication, a temporary source failure or a short service outage without
+requiring a full historical mirror.
+
+Repeated requests are safe because tender versions and rule matches have unique
+database constraints. A separate scheduler-slot claim prevents multiple service
+instances from needlessly performing the same scheduled batch.

@@ -104,6 +104,32 @@ rules is recorded and skipped. For a normal run it:
 7. inserts one match record per rule and version idempotently;
 8. records run counts and failure state in `collector_runs`.
 
+### Scheduler
+
+The API process hosts a timezone-aware Tokio scheduler. Its default schedule is
+`06:00`, `12:00`, `18:00` and `23:00` in `Asia/Taipei`, with one day of lookback.
+
+Before a scheduled batch starts, it atomically inserts a `(scheduler_name,
+scheduled_for)` claim into PostgreSQL. This is the cross-instance coordination
+boundary: only the process that inserts the row executes the batch. Each target
+date still receives its own `collector_runs` record.
+
+```text
+Scheduled slot
+      |
+      v
+PostgreSQL slot claim ---- conflict ---> skip duplicate instance
+      |
+      v
+oldest target date -> newest target date
+      |
+      v
+collector_runs + scheduler_runs summary
+```
+
+A source failure is isolated to its target date. The scheduler records a partial
+or failed slot, continues remaining dates, and stays alive for the next slot.
+
 ## Performance Principles
 
 1. Never fetch external source data on every page view.
